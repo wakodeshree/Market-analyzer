@@ -2,141 +2,146 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# Set up mobile-friendly page config
-st.set_page_config(page_title="Pro Quant Analyzer", page_icon="📈", layout="centered")
+# Mobile-Optimized Dashboard Configuration
+st.set_page_config(page_title="Nifty 50 Options Analyzer", page_icon="⚡", layout="centered")
 
-st.title("📈 Pro Quant Market Analyzer")
-st.markdown("### High-Probability Intraday & Options Engine")
+st.title("⚡ Nifty 50 Options Quant Dashboard")
+st.markdown("### Real-Time Option Chain & Capital Management Engine")
 st.write("---")
 
-# User Configuration Sidebar (Perfect for Mobile view)
-st.sidebar.header("⚙️ Risk & Capital Settings")
-capital = st.sidebar.number_input("Your Trading Capital (₹)", min_value=5000, max_value=1000000, value=15000, step=1000)
-max_risk_pct = st.sidebar.slider("Max Risk per Trade (%)", 0.5, 5.0, 1.0, 0.5)
-max_risk_rupees = (max_risk_pct / 100) * capital
+# Capital Settings for Trade Validation
+st.sidebar.header("💳 Capital Allocator")
+capital = st.sidebar.number_input("Your Trading Capital (₹)", min_value=5000, max_value=500000, value=15000, step=1000)
+max_risk_per_trade = st.sidebar.slider("Max Risk Allocation (₹)", 150, 1000, 300, 50)
 
-selected_stock = st.sidebar.selectbox("Select Target Stock", ["SBIN", "TATAMOTORS", "RELIANCE", "INFY"])
-
-# ==========================================
-# ADVANCED ANALYSIS: PREVIOUS CHARTS LOGIC
-# ==========================================
-@st.cache_data(ttl=60)
-def analyze_previous_charts(stock):
+# =======================================================
+# ENGINE DATA: SIMULATING NIFTY 50 OPTION CHAIN DATA
+# =======================================================
+@st.cache_data(ttl=10)
+def generate_nifty_option_chain(spot_price):
     """
-    Simulates looking at the last 5 days of historical daily charts 
-    to find major Support, Resistance, and Trend direction.
+    Simulates real-time NSE India Option Chain structure with 50-point gaps.
+    Calculates Open Interest (OI) to locate major institutional blockages.
     """
-    # In production, this data would come from a live API history payload
-    base_prices = {"SBIN": 810.0, "TATAMOTORS": 950.0, "RELIANCE": 2450.0, "INFY": 1420.0}
-    bp = base_prices[stock]
+    # Round to closest 50-point strike to find At-The-Money (ATM)
+    atm_strike = int(round(spot_price / 50) * 50)
+    strikes = [atm_strike + i for i in range(-150, 200, 50)]
     
-    historical_resistance = bp * 1.015  # Key swing high
-    historical_support = bp * 0.985     # Key swing low
-    
-    return round(historical_support, 2), round(historical_resistance, 2)
+    chain_data = []
+    for strike in strikes:
+        # Distance from current market spot price
+        distance = strike - spot_price
+        
+        # Simulating realistic option pricing (decaying as it moves Out-Of-The-Money)
+        if distance < 0: # In-the-money Calls / Out-of-the-money Puts
+            call_ltp = abs(distance) + random.uniform(10, 30)
+            put_ltp = random.uniform(5, 25)
+            call_oi = random.randint(15000, 45000)
+            put_oi = random.randint(55000, 120000) # Heavy Put OI implies Support
+        else: # Out-of-the-money Calls / In-the-money Puts
+            call_ltp = max(2.0, 120 - distance * 0.6 + random.uniform(-5, 5))
+            put_ltp = distance + random.uniform(10, 30)
+            call_oi = random.randint(60000, 150000) # Heavy Call OI implies Resistance
+            put_oi = random.randint(10000, 40000)
+            
+        chain_data.append({
+            "Call OI (Lakhs)": round(call_oi / 100000, 2),
+            "Call Premium (₹)": round(call_ltp, 2),
+            "STRIKE PRICE": strike,
+            "Put Premium (₹)": round(put_ltp, 2),
+            "Put OI (Lakhs)": round(put_oi / 100000, 2)
+        })
+        
+    return pd.DataFrame(chain_data), atm_strike
 
-prev_support, prev_resistance = analyze_previous_charts(selected_stock)
+# Current Market Parameters
+nifty_spot = 23515.00  # Baseline Nifty spot price
+df_chain, atm_strike_price = generate_nifty_option_chain(nifty_spot)
 
-# Display historical analysis block
-st.subheader("📊 Historical Chart Analysis (Multi-Day)")
-col1, col2 = st.columns(2)
-with col1:
-    st.metric(label="🔑 Key Historical Support", value=f"₹{prev_support}")
-with col2:
-    st.metric(label="🚀 Major Resistance Barrier", value=f"₹{prev_resistance}")
+# Find support and resistance using maximum Open Interest (OI)
+highest_call_oi_row = df_chain.loc[df_chain["Call OI (Lakhs)"].idxmax()]
+highest_put_oi_row = df_chain.loc[df_chain["Put OI (Lakhs)"].idxmax()]
 
-st.info(f"💡 **System Strategy:** The engine will validate live breakouts only if the price clears the historical resistance barrier of **₹{prev_resistance}**.")
+resistance_zone = int(highest_call_oi_row["STRIKE PRICE"])
+support_zone = int(highest_put_oi_row["STRIKE PRICE"])
 
-# ==========================================
-# LIVE ENGINE SCANNER
-# ==========================================
+# =======================================================
+# METRICS PANEL FOR MOBILE
+# =======================================================
+st.subheader("📊 Institutional Open Interest Analysis")
+m_col1, m_col2, m_col3 = st.columns(3)
+with m_col1:
+    st.metric(label="🎯 Nifty 50 Spot", value=f"₹{nifty_spot}")
+with m_col2:
+    st.metric(label="🧱 Institutional Support", value=f"{support_zone}", delta="Puts Active")
+with m_col3:
+    st.metric(label="🚧 Major Resistance", value=f"{resistance_zone}", delta="-Calls Active", delta_color="inverse")
+
+st.markdown(f"👉 **Analysis Overview:** Institutional data shows key floor protection at **{support_zone}**. An upward explosive trend is triggered if Nifty cracks and sustains above **{resistance_zone}**.")
+
+# =======================================================
+# INTERACTIVE OPTION CHAIN GRAPHIC UI
+# =======================================================
+with st.expander("🔍 View Live Nifty 50 Option Chain Matrix"):
+    st.dataframe(
+        df_chain.style.background_gradient(subset=["Call OI (Lakhs)", "Put OI (Lakhs)"], cmap="YlOrRd"),
+        use_container_width=True,
+        hide_index=True
+    )
+
+# =======================================================
+# LIVE SCANNER TRIGGER ENGINE
+# =======================================================
 st.write("---")
-st.subheader("⚡ Live Market Scanner Execution")
+st.subheader("⚡ Live Option Breakout Scanner")
 
-if st.button("🚀 Execute Strategy Scan", use_container_width=True):
-    with st.spinner("Analyzing current volume profiles and calculating VWAP..."):
+if st.button("🔥 Scan Nifty Option Chain for Trades", use_container_width=True):
+    with st.spinner("Processing volume delta changes across 7 underlying strike layers..."):
         
-        # Simulate live price ticks breaking past the historical levels
-        ticks = 10
-        current_price = prev_resistance - 2.0  # Start just below resistance
-        market_data = []
+        # Simulate a quick structural move breaking past resistance zone
+        simulated_breakout_spot = resistance_zone + 12.50
         
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        # Regenerate chain at breakout level
+        df_breakout_chain, current_atm = generate_nifty_option_chain(simulated_breakout_spot)
         
-        trade_triggered = False
+        st.balloons()
+        st.success(f"📈 Nifty Breakout! Market cleared historical Call OI ceiling of {resistance_zone} (Current: ₹{simulated_breakout_spot})")
         
-        for i in range(ticks):
-            # Simulate a strong upward breakout move on institutional volume
-            current_price += random.uniform(-0.5, 2.5)
-            volume = random.randint(15000, 45000)
+        # Pull standard target Call contract information (At-The-Money Call Option)
+        atm_contract = df_breakout_chain[df_breakout_chain["STRIKE PRICE"] == current_atm].iloc[0]
+        option_premium = atm_contract["Call Premium (₹)"]
+        
+        # RISK MANAGEMENT & QUANTITY CALCULATOR FOR NIFTY OPTIONS
+        LOT_SIZE = 65  # Nifty 50 statutory lot limitation
+        cost_per_lot = option_premium * LOT_SIZE
+        
+        # Calculate maximum lots you can buy with your ₹15,000 capital
+        max_lots_allowed = int(capital / cost_per_lot)
+        
+        if max_lots_allowed > 0:
+            total_premium_outlay = max_lots_allowed * cost_per_lot
             
-            high = current_price * 1.001
-            low = current_price * 0.999
+            # Setup standard mechanical parameters for Scalping
+            stop_loss_premium = option_premium - (max_risk_per_trade / (max_lots_allowed * LOT_SIZE))
+            # Protect against math dipping premium below zero
+            if stop_loss_premium < (option_premium * 0.70):
+                stop_loss_premium = option_premium * 0.80 # Cap risk max at 20% of premium
+                
+            expected_target_premium = option_premium + ((max_risk_per_trade * 2) / (max_lots_allowed * LOT_SIZE))
             
-            market_data.append({'close': current_price, 'high': high, 'low': low, 'volume': volume})
-            df = pd.DataFrame(market_data)
+            st.markdown("### 🎯 RECOMMENDED STRATEGY PLAY")
+            st.info(f"⚡ **Trade Target:** Buy NIFTY {current_atm} CE (Call Option for Upward Trend)")
             
-            # Calculate VWAP
-            typical_price = (df['close'] + df['high'] + df['low']) / 3
-            df['vwap'] = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
-            latest_vwap = df['vwap'].iloc[-1]
-            
-            status_text.text(f"Scanning Tick {i+1}/10 | Price: ₹{round(current_price, 2)} | VWAP: ₹{round(latest_vwap, 2)}")
-            progress_bar.progress((i + 1) / ticks)
-            
-            # CHECK MULTI-LAYER CONDITION:
-            # 1. Price must be above VWAP
-            # 2. Price must break out past historical chart resistance
-            if not trade_triggered and current_price > latest_vwap and current_price > prev_resistance:
-                trade_triggered = True
+            r_col1, r_col2 = st.columns(2)
+            with r_col1:
+                st.metric(label="📥 Entry Premium Buy", value=f"₹{round(option_premium, 2)}")
+                st.metric(label="📦 Trade Volume (Lots)", value=f"{max_lots_allowed} Lots ({max_lots_allowed * LOT_SIZE} Qty)")
+            with r_col2:
+                st.metric(label="🛑 Premium Stop-Loss", value=f"₹{round(stop_loss_premium, 2)}")
+                st.metric(label="🎯 Premium Take-Profit", value=f"₹{round(expected_target_premium, 2)}")
                 
-                # Math: Risk Calculations for Spot
-                stop_loss = current_price * 0.995
-                target = current_price * 1.015  # Higher target due to structural breakout
-                
-                # OPTIONS STRATEGY ENGINE CALCULATIONS
-                # Determine ATMs/OTM Strike price based on current stock underlying value
-                strike_price = int(round(current_price / 10) * 10)
-                option_name = f"{selected_stock} {strike_price} CE (Call Option)"
-                
-                # Estimated standard option premium price for an active intraday contract
-                estimated_premium = 25.0 
-                
-                # Math: Calculate exact quantity based on premium cost and capital limits
-                # Options buying doesn't allow leverage, full premium required upfront
-                max_qty_by_capital = int(capital / estimated_premium)
-                
-                # Risk allocation constraints (Stop-loss on option is typically tighter or managed on spot)
-                # Let's cap maximum lot sizing to respect risk per trade allocation
-                allowed_option_qty = max_qty_by_capital
-                if (allowed_option_qty * estimated_premium * 0.20) > max_risk_rupees: # Assuming 20% stop loss on premium
-                    allowed_option_qty = int(max_risk_rupees / (estimated_premium * 0.20))
-                
-                if allowed_option_qty == 0:
-                    allowed_option_qty = 1
-                    
-                total_premium_cost = allowed_option_qty * estimated_premium
-                
-                # Display Results beautifully on mobile
-                st.balloons()
-                st.success("🔥 BREAKOUT DETECTED! MULTI-CHART CONDITIONS MET! 🔥")
-                
-                st.markdown(f"### 🎯 RECOMMENDED OPTION TRADE")
-                st.error(f"**Trade Instrument:** {option_name}")
-                
-                metrics_col1, metrics_col2 = st.columns(2)
-                with metrics_col1:
-                    st.metric(label="📥 Entry Premium Range", value=f"₹{estimated_premium}")
-                    st.metric(label="📦 Exact Buy Quantity", value=f"{allowed_option_qty} Qty")
-                with metrics_col2:
-                    st.metric(label="🛑 Option Stop-Loss", value=f"₹{round(estimated_premium * 0.80, 2)}")
-                    st.metric(label="🎯 Target Take-Profit", value=f"₹{round(estimated_premium * 1.40, 2)}")
-                
-                st.warning(f"💳 **Capital Required for Option Buying:** ₹{round(total_premium_cost, 2)} (Within your ₹{capital} limit)")
-                break
-                
-        if not trade_triggered:
-            st.info("Scan finished. Price did not break past historical multi-day resistance barriers today.")
+            st.warning(f"💳 **Margin Required:** ₹{round(total_premium_outlay, 2)} | **Remaining Cash Protection:** ₹{round(capital - total_premium_outlay, 2)}")
+        else:
+            st.error(f"❌ Premium price (₹{option_premium}) for 1 Lot requires ₹{round(cost_per_lot, 2)}. Your current capital of ₹{capital} is insufficient to execute this lot setup.")

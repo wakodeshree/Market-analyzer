@@ -133,4 +133,12 @@ if st.button("🔥 Scan Nifty Option Chain for Trades", use_container_width=True
             
             r_col1, r_col2 = st.columns(2)
             with r_col1:
-                st.metric(label="📥 Entry Premium Buy", value
+                st.metric(label="📥 Entry Premium Buy", value=f"₹{round(option_premium, 2)}")
+                st.metric(label="📦 Trade Volume (Lots)", value=f"{max_lots_allowed} Lots ({max_lots_allowed * LOT_SIZE} Qty)")
+            with r_col2:
+                st.metric(label="🛑 Option Stop-Loss", value=f"₹{round(stop_loss_premium, 2)}")
+                st.metric(label="🎯 Premium Take-Profit", value=f"₹{round(expected_target_premium, 2)}")
+                
+            st.warning(f"💳 **Margin Required:** ₹{round(total_premium_outlay, 2)} | **Remaining Cash Protection:** ₹{round(capital - total_premium_outlay, 2)}")
+        else:
+            st.error(f"❌ Premium price (₹{option_premium}) for 1 Lot requires ₹{round(cost_per_lot, 2)}. Your current capital of ₹{capital} is insufficient to execute this lot setup.")
